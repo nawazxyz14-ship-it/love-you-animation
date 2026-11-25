@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>50 Ways to Say I Love You</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #120e1f;
+      color: #f7f0fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    canvas {
+      display: block;
+      max-width: 100vw;
+      max-height: 100vh;
+      touch-action: manipulation;
+    }
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, #1d1633 0%, #120e1f 70%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      transition: opacity 0.8s ease;
+    }
+    #overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .title {
+      color: #f0cb86;
+      letter-spacing: 3px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 22px;
+      text-transform: uppercase;
+    }
+    #startBtn {
+      background: transparent;
+      color: #ffe2a8;
+      border: 1.5px solid #f0cb86;
+      padding: 14px 34px;
+      font-size: 16px;
+      font-family: Georgia, serif;
+      font-style: italic;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 0 22px rgba(240, 203, 134, 0.25);
+      transition: all 0.3s ease;
+    }
+    #startBtn:hover {
+      background: rgba(240, 203, 134, 0.14);
+      box-shadow: 0 0 32px rgba(240, 203, 134, 0.45);
+      transform: scale(1.04);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="overlay">
+    <div class="title">50 Ways to Say I Love You</div>
+    <button id="startBtn">Tap to Begin ♥️</button>
+  </div>
+
+  <canvas id="wheel"></canvas>
+  <audio id="bgMusic" src="Song.mp3" preload="auto"></audio>
+
+  <script>
+    const PHRASES = [
+      "I love you", "You mean the world to me", "My heart is yours",
+      "Forever and always", "You are my home", "I adore you",
+      "You complete me", "My favorite person", "I'm yours",
+      "You are my sunshine", "Love you endlessly", "My soulmate",
+      "You make me whole", "Always on my mind", "You're my everything",
+      "I cherish you", "Better together", "My one and only",
+      "You steal my breath", "Crazy about you", "My safe place",
+      "Love at first sight", "You are magic", "My heart beats for you",
+      "Lucky to have you", "You're my peace", "Head over heels",
+      "My sweetest dream", "You light up my life", "Endlessly in love",
+      "You're my anchor", "Together forever", "My greatest blessing",
+      "I'm so into you", "You're my happiness", "Lost in your eyes",
+      "My best friend", "Love you to the moon", "You're irreplaceable",
+      "My heart chose you", "Every day with you", "You're my lifeline",
+      "Purest love", "You're my universe", "Always by your side",
+      "My forever love", "You make me smile", "Deeply in love",
+      "You're my destiny", "Simply love you"
+    ];
+
+    const N = PHRASES.length;
+    const TOTAL_DURATION = 31.0;
+    const FADE_DURATION = 0.9;
+
+    const canvas = document.getElementById("wheel");
+    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
+    const startBtn = document.getElementById("startBtn");
+    const audio = document.getElementById("bgMusic");
+
+    let SIZE, CX, CY, INNER_R, OUTER_R, SCALE;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      SIZE = Math.min(window.innerWidth, window.innerHeight, 760);
+      canvas.style.width = SIZE + "px";
+      canvas.style.height = SIZE + "px";
+      canvas.width = Math.floor(SIZE * dpr);
+      canvas.height = Math.floor(SIZE * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      CX = SIZE / 2;
+      CY = SIZE / 2;
+      SCALE = SIZE / 700;
+      INNER_R = 128 * SCALE;
+      OUTER_R = 320 * SCALE;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    const stars = Array.from({ length: 90 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      r: 0.6 + Math.random() * 1.4,
+      speed: 0.00012 + Math.random() * 0.00025,
+      phase: Math.random() * Math.PI * 2,
+      twinkle: 1.5 + Math.random() * 2.5
+    }));
+
+    const spokes = PHRASES.map((text, i) => {
+      const deg = (90 - (i * 360) / N + 360) % 360;
+      const rad = (deg * Math.PI) / 180;
+      return { text, deg, rad, born: null };
+    });
+
+    let started = false;
+    let startTime = 0;
+    let shown = 0;
+    let done = false;
+    let cur = 0;
+    let centerFade = 1;
+    let lastTime = 0;
+
+    function clamp(v, lo, hi) {
+      if (lo === undefined) lo = 0;
+      if (hi === undefined) hi = 1;
+      return Math.max(lo, Math.min(hi, v));
+    }
+
+    function showCenter(idx) {
+      cur = idx;
+      centerFade = 0;
+    }
+
+    startBtn.addEventListener("click", () => {
+      overlay.classList.add("hidden");
+      started = true;
+      startTime = performance.now() / 1000;
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    });
+
+    canvas.addEventListener("click", (e) => {
+      if (!started) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left - CX;
+      const y = -(e.clientY - rect.top - CY);
+      const dist = Math.hypot(x, y);
+
+      if (dist >= INNER_R && dist <= OUTER_R + 20) {
+        let deg = (Math.atan2(y, x) * 180) / Math.PI;
+        if (deg < 0) deg += 360;
+        let idx = Math.round(((90 - deg + 360) % 360) / (360 / N)) % N;
+        if (spokes[idx].born !== null) {
+          showCenter(idx);
+        }
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (!done) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        showCenter((cur + 1) % N);
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        showCenter((cur - 1 + N) % N);
+      }
+    });
+
+    function drawWrappedText(text, x, y, maxWidth, lineHeight) {
+      const words = text.split(" ");
+      let line = "";
+      const lines = [];
+      for (let w of words) {
+        const test = line ? line + " " + w : w;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      const startY = y - ((lines.length - 1) * lineHeight) / 2;
+      lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineHeight));
+    }
+
+    function render(nowMs) {
+      const now = nowMs / 1000;
+      const dt = lastTime ? now - lastTime : 0.016;
+      lastTime = now;
+
+      ctx.fillStyle = "#120e1f";
+      ctx.fillRect(0, 0, SIZE, SIZE);
+
+      for (const s of stars) {
+        s.y -= s.speed;
+        if (s.y < 0) s.y = 1;
+        const alpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(now * s.twinkle + s.phase));
+        ctx.fillStyle = "rgba(155, 142, 200, " + alpha + ")";
+        ctx.beginPath();
+        ctx.arc(s.x * SIZE, s.y * SIZE, s.r * SCALE, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const elapsed = started ? now - startTime : 0;
+
+      if (started && !done) {
+        const targetShown = Math.min(N, Math.floor((elapsed / TOTAL_DURATION) * N) + 1);
+        while (shown < targetShown) {
+          spokes[shown].born = now;
+          showCenter(shown);
+          shown++;
+          if (shown === N) done = true;
+        }
+      }
+
+      const progress = started ? clamp(elapsed / TOTAL_DURATION) : 0;
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + progress * Math.PI * 2;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(CX, CY, OUTER_R, startAngle, endAngle);
+      ctx.strokeStyle = "rgba(240, 203, 134, 0.25)";
+      ctx.lineWidth = 6 * SCALE;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(CX, CY, OUTER_R, startAngle, endAngle);
+      ctx.strokeStyle = "#f0cb86";
+      ctx.lineWidth = 2 * SCALE;
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.font = Math.max(8, 10.5 * SCALE) + 'px "Segoe UI", sans-serif';
+      ctx.textBaseline = "middle";
+
+      for (let i = 0; i < N; i++) {
+        const p = spokes[i];
+        if (p.born === null) continue;
+
+        const u = clamp((now - p.born) / FADE_DURATION);
+        const ease = 1 - Math.pow(1 - u, 3);
+        const r = INNER_R + (12 + 18 * ease) * SCALE;
+
+        const x = CX + Math.cos(p.rad) * r;
+        const y = CY - Math.sin(p.rad) * r;
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (p.deg > 90 && p.deg < 270) {
+          ctx.rotate(-p.rad + Math.PI);
+          ctx.textAlign = "right";
+        } else {
+          ctx.rotate(-p.rad);
+          ctx.textAlign = "left";
+        }
+
+        if (i === cur) {
+          ctx.fillStyle = "#ffe2a8";
+        } else {
+          ctx.fillStyle = "rgba(130, 118, 170, " + ease + ")";
+        }
+        ctx.fillText(p.text, 0, 0);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(CX, CY, INNER_R, 0, Math.PI * 2);
+      ctx.fillStyle = "#120e1f";
+      ctx.fill();
+      ctx.strokeStyle = "#342a52";
+      ctx.lineWidth = 1.5 * SCALE;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(CX, CY, INNER_R - 7 * SCALE, 0, Math.PI * 2);
+      ctx.strokeStyle = "#221a38";
+      ctx.lineWidth = 1 * SCALE;
+      ctx.stroke();
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#f0cb86";
+      ctx.font = "700 " + (11 * SCALE) + 'px "Segoe UI", sans-serif';
+      ctx.fillText("50 WAYS TO SAY", CX, CY - 54 * SCALE);
+      ctx.fillText("I LOVE YOU", CX, CY - 39 * SCALE);
+
+      if (started) {
+        centerFade = clamp(centerFade + dt * 2.5);
+        const fadeEase = 1 - Math.pow(1 - centerFade, 3);
+        ctx.fillStyle = "rgba(247, 240, 250, " + fadeEase + ")";
+        ctx.font = "italic " + (20 * SCALE) + 'px Georgia, "Times New Roman", serif';
+        drawWrappedText(PHRASES[cur], CX, CY + 6 * SCALE, 200 * SCALE, 24 * SCALE);
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(CX - 28 * SCALE, CY + 46 * SCALE);
+      ctx.lineTo(CX + 28 * SCALE, CY + 46 * SCALE);
+      ctx.strokeStyle = "#f0cb86";
+      ctx.lineWidth = 1 * SCALE;
+      ctx.stroke();
+
+      ctx.fillStyle = "#8a7eb5";
+      ctx.font = (11 * SCALE) + 'px "Segoe UI", sans-serif';
+      ctx.fillText((cur + 1) + " / " + N, CX, CY + 64 * SCALE);
+
+      if (done) {
+        ctx.fillStyle = "#b5a6db";
+        ctx.font = (10 * SCALE) + 'px "Segoe UI", sans-serif';
+        ctx.fillText("Click any line to read", CX, CY + 84 * SCALE);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
